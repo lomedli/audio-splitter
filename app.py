@@ -1,11 +1,11 @@
 from flask import Flask, request, jsonify, send_file
-from pydub import AudioSegment
 import requests
 import tempfile
 import os
 import uuid
 import threading
 import time
+import subprocess
 
 app = Flask(__name__)
 
@@ -30,6 +30,31 @@ def cleanup_old_files():
 cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
 cleanup_thread.start()
 
+def get_audio_duration(file_path):
+    """Get audio duration in seconds using ffprobe"""
+    cmd = [
+        'ffprobe', '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        file_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return float(result.stdout.strip())
+
+def split_audio_ffmpeg(input_path, output_path, start_time, duration):
+    """Split audio using ffmpeg"""
+    cmd = [
+        'ffmpeg', '-i', input_path,
+        '-ss', str(start_time),
+        '-t', str(duration),
+        '-acodec', 'libmp3lame',
+        '-ab', '64k',
+        '-ac', '1',
+        '-y',
+        output_path
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
 @app.route('/split', methods=['POST'])
 def split_audio():
     try:
@@ -47,10 +72,11 @@ def split_audio():
             temp_path = temp_file.name
         
         try:
-            audio = AudioSegment.from_file(temp_path)
-            chunk_length_ms = chunk_minutes * 60 * 1000
+            # Get audio duration
+            total_duration = get_audio_duration(temp_path)
+            print(f"Audio length: {total_duration/60:.1f} minutes")
             
-            print(f"Audio length: {len(audio)/1000/60:.1f} minutes")
+            chunk_duration = chunk_minutes * 60
             
             session_id = str(uuid.uuid4())[:8]
             chunks_dir = f"/tmp/chunks_{session_id}"
@@ -58,22 +84,18 @@ def split_audio():
             
             chunks_info = []
             chunks_paths = []
-            start = 0
+            start_time = 0
             chunk_number = 1
             
-            while start < len(audio):
-                end = min(start + chunk_length_ms, len(audio))
-                chunk = audio[start:end]
+            while start_time < total_duration:
+                end_time = min(start_time + chunk_duration, total_duration)
+                actual_duration = end_time - start_time
                 
                 chunk_filename = f"chunk_{chunk_number}.mp3"
                 chunk_path = os.path.join(chunks_dir, chunk_filename)
                 
-                chunk.export(
-                    chunk_path,
-                    format="mp3",
-                    bitrate="64k",
-                    parameters=["-ac", "1"]
-                )
+                # Split using ffmpeg
+                split_audio_ffmpeg(temp_path, chunk_path, start_time, actual_duration)
                 
                 chunks_paths.append(chunk_path)
                 
@@ -82,15 +104,15 @@ def split_audio():
                 chunks_info.append({
                     "url": download_url,
                     "chunk_number": chunk_number,
-                    "start_time": round(start / 1000, 2),
-                    "end_time": round(end / 1000, 2),
-                    "duration_minutes": round((end - start) / 1000 / 60, 2)
+                    "start_time": round(start_time, 2),
+                    "end_time": round(end_time, 2),
+                    "duration_minutes": round(actual_duration / 60, 2)
                 })
                 
-                if end >= len(audio):
+                if end_time >= total_duration:
                     break
                 
-                start = end - 2000
+                start_time = end_time - 2
                 chunk_number += 1
             
             temp_files[session_id] = {
@@ -104,7 +126,7 @@ def split_audio():
                 "success": True,
                 "session_id": session_id,
                 "total_chunks": len(chunks_info),
-                "total_duration_minutes": round(len(audio) / 1000 / 60, 2),
+                "total_duration_minutes": round(total_duration / 60, 2),
                 "chunks": chunks_info
             })
             
