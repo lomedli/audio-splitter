@@ -37,7 +37,7 @@ def split_audio():
         audio_url = data['audio_url']
         chunk_minutes = data.get('chunk_minutes', 5)
         
-        print(f"מוריד אודיו מ: {audio_url}")
+        print(f"Downloading audio from: {audio_url}")
         
         response = requests.get(audio_url, timeout=300)
         response.raise_for_status()
@@ -50,7 +50,7 @@ def split_audio():
             audio = AudioSegment.from_file(temp_path)
             chunk_length_ms = chunk_minutes * 60 * 1000
             
-            print(f"אורך אודיו: {len(audio)/1000/60:.1f} דקות")
+            print(f"Audio length: {len(audio)/1000/60:.1f} minutes")
             
             session_id = str(uuid.uuid4())[:8]
             chunks_dir = f"/tmp/chunks_{session_id}"
@@ -98,7 +98,7 @@ def split_audio():
                 'created': time.time()
             }
             
-            print(f"נוצרו {len(chunks_info)} חלקים")
+            print(f"Created {len(chunks_info)} chunks")
             
             return jsonify({
                 "success": True,
@@ -112,7 +112,7 @@ def split_audio():
             os.remove(temp_path)
             
     except Exception as e:
-        print(f"שגיאה: {str(e)}")
+        print(f"Error: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e)
@@ -147,199 +147,3 @@ def health():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
-```
-
-שמור בשם: `app.py`
-
----
-
-### קובץ 2: `requirements.txt`
-
-פתח Notepad חדש, הדבק:
-```
-flask==3.0.0
-pydub==0.25.1
-requests==2.31.0
-gunicorn==21.2.0
-```
-
-שמור בשם: `requirements.txt`
-
----
-
-### קובץ 3: `Procfile`
-
-פתח Notepad חדש, הדבק:
-```
-web: gunicorn app:app
-```
-
-שמור בשם: `Procfile` (בלי סיומת!)
-
----
-
-## שלב 2: העלאה ל-GitHub
-
-**א. יצירת חשבון GitHub (אם אין לך):**
-1. לך ל-https://github.com
-2. לחץ "Sign up"
-3. מלא פרטים
-4. אמת את המייל
-
-**ב. יצירת Repository:**
-1. אחרי שנכנסת, לחץ על הכפתור הירוק "New" (או "+" למעלה)
-2. מלא:
-   - Repository name: `audio-splitter`
-   - בחר: **Public**
-   - לחץ "Create repository"
-
-**ג. העלאת הקבצים:**
-1. תראה מסך עם אפשרויות
-2. לחץ על "uploading an existing file"
-3. גרור את 3 הקבצים שיצרת (app.py, requirements.txt, Procfile)
-4. למטה כתוב "Add files"
-5. לחץ "Commit changes"
-
-✅ **סיימת! עכשיו יש לך את הקוד ב-GitHub**
-
----
-
-## שלב 3: העלאה ל-Render.com
-
-**א. יצירת חשבון:**
-1. לך ל-https://render.com
-2. לחץ "Get Started for Free"
-3. בחר "Sign in with GitHub"
-4. אשר את החיבור
-
-**ב. יצירת Web Service:**
-1. אחרי שנכנסת, תראה Dashboard
-2. לחץ "New +" למעלה
-3. בחר "Web Service"
-4. תראה רשימה של ה-Repositories שלך
-5. מצא את `audio-splitter`
-6. לחץ "Connect" ליד השם
-
-**ג. הגדרות (מלא בדיוק כך):**
-```
-Name: audio-splitter
-Region: Oregon (US West)
-Branch: main
-Runtime: Python 3
-Build Command: pip install -r requirements.txt
-Start Command: gunicorn app:app
-
-Instance Type: Free
-```
-
-7. גלול למטה ולחץ "Create Web Service"
-
-**ד. המתן:**
-- תראה לוגים רצים
-- המתן 2-3 דקות
-- כשזה מסיים תראה למעלה URL כמו:
-  `https://audio-splitter-xxxx.onrender.com`
-
-**ה. העתק את ה-URL הזה!** תצטרך אותו למייק.
-
----
-
-# חלק ב': בניית הסנריו ב-Make.com
-
-## שלב 4: יצירת התרחיש ב-Make
-
-**א. כניסה ל-Make:**
-1. לך ל-https://www.make.com
-2. התחבר לחשבון שלך
-
-**ב. יצירת תרחיש חדש:**
-1. לחץ "Create a new scenario"
-2. שם: "Audio Splitter + BASE"
-
----
-
-## שלב 5: הוספת Webhook
-
-**Module 1: Webhook**
-
-1. לחץ על ה-"+" הראשון
-2. חפש "Webhooks"
-3. בחר "Custom Webhook"
-4. לחץ "Create a webhook"
-5. שם: `Audio Split Webhook`
-6. לחץ "Save"
-7. **העתק את ה-URL** שקיבלת (נראה כמו: https://hook.eu2.make.com/xxxx)
-
-✅ עכשיו יש לך webhook! בוא נמשיך.
-
----
-
-## שלב 6: הוספת HTTP Request לשרת
-
-**Module 2: HTTP Request**
-
-1. לחץ על ה-"+" אחרי ה-Webhook
-2. חפש "HTTP"
-3. בחר "Make a request"
-4. מלא:
-```
-URL: https://audio-splitter-xxxx.onrender.com/split
-(שים את ה-URL שקיבלת מRender!)
-
-Method: POST
-
-Headers:
-  Key: Content-Type
-  Value: application/json
-
-Body type: Raw
-
-Request content:
-{
-  "audio_url": "{{1.audio_url}}",
-  "chunk_minutes": 5
-}
-```
-
-5. Parse response: **YES**
-6. לחץ "OK"
-
----
-
-## שלב 7: הוספת Iterator
-
-**Module 3: Iterator**
-
-1. לחץ על ה-"+" אחרי HTTP
-2. חפש "Iterator"
-3. בחר "Iterator"
-4. ב-Array: לחץ על השדה
-5. תראה את הנתונים מ-Module 2
-6. בחר: `2. chunks`
-7. לחץ "OK"
-
----
-
-## שלב 8: שליחה ל-BASE 44
-
-**Module 4: HTTP Request (ל-BASE)**
-
-1. לחץ על ה-"+" אחרי Iterator
-2. שוב "HTTP" → "Make a request"
-3. מלא (תצטרך לשנות לפי ה-API של BASE):
-```
-URL: [כאן תשים את ה-URL של BASE 44 API שלך]
-
-Method: POST
-
-Headers:
-  Key: Content-Type
-  Value: application/json
-
-Body type: Raw
-
-Request content:
-{
-  "audio_url": "{{3.url}}",
-  "chunk_number": {{3.chunk_number}}
-}
